@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crane Load Vibration Simulator</title>
+  <style>
+    :root {
+      --bg: #081118;
+      --bg-soft: #10212d;
+      --panel: rgba(9, 20, 29, 0.78);
+      --panel-border: rgba(161, 190, 204, 0.18);
+      --steel: #90a8b5;
+      --muted: #91a3af;
+      --text: #eef5f2;
+      --accent: #f4a340;
+      --accent-strong: #ffd37a;
+      --graph: #47c6d7;
+      --good: #7fce8d;
+      --warn: #f7be63;
+      --danger: #ff8d7d;
+      --shadow: 0 22px 48px rgba(0, 0, 0, 0.32);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(244, 163, 64, 0.18), transparent 32%),
+        radial-gradient(circle at top right, rgba(71, 198, 215, 0.16), transparent 28%),
+        linear-gradient(160deg, #071017 0%, #10212d 50%, #061017 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 85%);
+    }
+
+    .shell {
+      width: min(1360px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 34px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .hero-copy,
+    .hero-stats,
+    .visual-panel,
+    .controls-panel,
+    .graph-panel {
+      padding: 22px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent-strong);
+      font-size: 0.82rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      font-family: Georgia, "Palatino Linotype", serif;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 3vw, 3.6rem);
+      line-height: 1.02;
+      max-width: 12ch;
+    }
+
+    .intro {
+      max-width: 64ch;
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.58;
+    }
+
+    .hero-stats {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .metric {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .metric span,
+    .metric small {
+      display: block;
+    }
+
+    .metric span {
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 6px;
+      font-size: clamp(1.35rem, 2.1vw, 2rem);
+      font-family: Consolas, "Courier New", monospace;
+      color: var(--text);
+    }
+
+    .metric small {
+      margin-top: 6px;
+      color: var(--accent-strong);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.95fr);
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .panel-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .status-pill {
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      font-size: 0.85rem;
+      color: var(--accent-strong);
+      background: rgba(255, 255, 255, 0.04);
+      white-space: nowrap;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: linear-gradient(180deg, rgba(4, 12, 16, 0.72), rgba(16, 33, 45, 0.88));
+    }
+
+    #simCanvas {
+      height: 430px;
+    }
+
+    #graphCanvas {
+      height: 290px;
+    }
+
+    .controls-panel {
+      display: grid;
+      gap: 18px;
+    }
+
+    .controls-panel h2 {
+      margin-bottom: 2px;
+    }
+
+    .control {
+      display: grid;
+      gap: 9px;
+    }
+
+    .control-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      color: var(--text);
+    }
+
+    .control-head span {
+      font-size: 0.98rem;
+    }
+
+    .control-head output {
+      color: var(--accent-strong);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.96rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      appearance: none;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(244, 163, 64, 0.85), rgba(71, 198, 215, 0.85));
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fef6e6;
+      border: 2px solid #183649;
+      box-shadow: 0 0 0 3px rgba(255, 211, 122, 0.18);
+      cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fef6e6;
+      border: 2px solid #183649;
+      box-shadow: 0 0 0 3px rgba(255, 211, 122, 0.18);
+      cursor: pointer;
+    }
+
+    .button-row,
+    .preset-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      cursor: pointer;
+      transition: transform 0.18s ease, filter 0.18s ease, background 0.18s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    .action {
+      color: #081118;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      font-weight: 700;
+    }
+
+    .secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .preset {
+      color: var(--text);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .preset.active {
+      color: #081118;
+      background: linear-gradient(135deg, #7fce8d, #d8f0b4);
+    }
+
+    .equation {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .equation strong,
+    .equation code {
+      color: var(--text);
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    .graph-panel .panel-title {
+      margin-bottom: 14px;
+    }
+
+    .legend {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      #simCanvas {
+        height: 360px;
+      }
+
+      #graphCanvas {
+        height: 260px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .shell {
+        width: min(100% - 20px, 100%);
+        padding-top: 18px;
+      }
+
+      .hero-copy,
+      .hero-stats,
+      .visual-panel,
+      .controls-panel,
+      .graph-panel {
+        padding: 18px;
+      }
+
+      .button-row,
+      .preset-row {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="panel hero-copy">
+        <p class="eyebrow">Pendulum Approximation / Second Order Vibration</p>
+        <h1>Crane Load Vibration Simulator</h1>
+        <p class="intro">
+          This single-page model treats the suspended load as a damped pendulum with live parameter updates.
+          Mass changes the inertia, rope length sets the equivalent stiffness, and the damping coefficient governs
+          how quickly the sway decays. The derived vibration metrics below use the linearized form near small angles.
+        </p>
+      </div>
+      <div class="panel hero-stats">
+        <div class="metric">
+          <span>Natural Frequency</span>
+          <strong id="wnValue">0.00 rad/s</strong>
+          <small id="wnHzValue">0.00 Hz</small>
+        </div>
+        <div class="metric">
+          <span>Damping Ratio</span>
+          <strong id="zetaValue">0.000</strong>
+          <small id="modeValue">Lightly damped</small>
+        </div>
+        <div class="metric">
+          <span>Equivalent Stiffness</span>
+          <strong id="kValue">0 N/m</strong>
+          <small id="dispValue">Displacement: 0.00 m</small>
+        </div>
+      </div>
+    </section>
+
+    <main class="layout">
+      <section class="panel visual-panel">
+        <div class="panel-title">
+          <h2>Crane Motion</h2>
+          <span class="status-pill" id="statusPill">Paused</span>
+        </div>
+        <canvas id="simCanvas"></canvas>
+      </section>
+
+      <aside class="panel controls-panel">
+        <div class="panel-title">
+          <h2>Controls</h2>
+          <span class="status-pill" id="modePill">Lightly damped</span>
+        </div>
+
+        <label class="control" for="massSlider">
+          <div class="control-head">
+            <span>Mass m</span>
+            <output id="massOutput">300 kg</output>
+          </div>
+          <input id="massSlider" type="range" min="100" max="800" step="10" value="300">
+        </label>
+
+        <label class="control" for="dampingSlider">
+          <div class="control-head">
+            <span>Damping coefficient c</span>
+            <output id="dampingOutput">250 Ns/m</output>
+          </div>
+          <input id="dampingSlider" type="range" min="0" max="7000" step="10" value="250">
+        </label>
+
+        <label class="control" for="lengthSlider">
+          <div class="control-head">
+            <span>Rope length L</span>
+            <output id="lengthOutput">4.0 m</output>
+          </div>
+          <input id="lengthSlider" type="range" min="1" max="10" step="0.1" value="4">
+        </label>
+
+        <div class="button-row">
+          <button class="action" id="startBtn" type="button">Start</button>
+          <button class="secondary" id="pauseBtn" type="button">Pause</button>
+          <button class="secondary" id="resetBtn" type="button">Reset</button>
+        </div>
+
+        <div class="preset-row">
+          <button class="preset" id="undampedPreset" data-preset="undamped" type="button">Undamped</button>
+          <button class="preset active" id="lightPreset" data-preset="light" type="button">Lightly damped</button>
+          <button class="preset" id="heavyPreset" data-preset="heavy" type="button">Heavily damped</button>
+        </div>
+
+        <div class="equation">
+          <div><strong>Model</strong></div>
+          <div><code>m x'' + c x' + k x = 0</code> near small sway angles.</div>
+          <div>The animation integrates <code>&theta;'' + (c/m)&theta;' + (g/L) sin(&theta;) = 0</code>.</div>
+        </div>
+      </aside>
+    </main>
+
+    <section class="panel graph-panel">
+      <div class="panel-title">
+        <h2>Displacement vs Time</h2>
+        <span class="legend">Rolling 20 s window with grid lines and labeled axes</span>
+      </div>
+      <canvas id="graphCanvas"></canvas>
+    </section>
+  </div>
+
+  <script>
+    const simCanvas = document.getElementById("simCanvas");
+    const graphCanvas = document.getElementById("graphCanvas");
+
+    const controls = {
+      mass: document.getElementById("massSlider"),
+      damping: document.getElementById("dampingSlider"),
+      length: document.getElementById("lengthSlider")
+    };
+
+    const outputs = {
+      mass: document.getElementById("massOutput"),
+      damping: document.getElementById("dampingOutput"),
+      length: document.getElementById("lengthOutput"),
+      wn: document.getElementById("wnValue"),
+      wnHz: document.getElementById("wnHzValue"),
+      zeta: document.getElementById("zetaValue"),
+      mode: document.getElementById("modeValue"),
+      modePill: document.getElementById("modePill"),
+      status: document.getElementById("statusPill"),
+      stiffness: document.getElementById("kValue"),
+      displacement: document.getElementById("dispValue")
+    };
+
+    const buttons = {
+      start: document.getElementById("startBtn"),
+      pause: document.getElementById("pauseBtn"),
+      reset: document.getElementById("resetBtn")
+    };
+
+    const presetButtons = [...document.querySelectorAll("[data-preset]")];
+
+    const state = {
+      g: 9.81,
+      initialTheta: 18 * Math.PI / 180,
+      theta: 18 * Math.PI / 180,
+      omega: 0,
+      mass: Number(controls.mass.value),
+      damping: Number(controls.damping.value),
+      length: Number(controls.length.value),
+      running: false,
+      simTime: 0,
+      history: [],
+      historyWindow: 20,
+      historyBuffer: 60,
+      lastFrameTime: 0
+    };
+
+    function resizeCanvas(canvas) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width * dpr));
+      const height = Math.max(1, Math.round(rect.height * dpr));
+
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, width: rect.width, height: rect.height };
+    }
+
+    function getEquivalentStiffness() {
+      return state.mass * state.g / state.length;
+    }
+
+    function getNaturalFrequency() {
+      return Math.sqrt(state.g / state.length);
+    }
+
+    function getCriticalDamping() {
+      return 2 * state.mass * getNaturalFrequency();
+    }
+
+    function getDampingRatio() {
+      const cCrit = getCriticalDamping();
+      return cCrit === 0 ? 0 : state.damping / cCrit;
+    }
+
+    function getDisplacement() {
+      return state.length * Math.sin(state.theta);
+    }
+
+    function getDampingLabel(zeta) {
+      if (state.damping <= 0.0001) {
+        return "Undamped";
+      }
+      if (Math.abs(zeta - 1) < 0.05) {
+        return "Critically damped";
+      }
+      if (zeta < 1) {
+        return "Lightly damped";
+      }
+      return "Heavily damped";
+    }
+
+    function syncOutputs() {
+      const wn = getNaturalFrequency();
+      const zeta = getDampingRatio();
+      const mode = getDampingLabel(zeta);
+      const displacement = getDisplacement();
+
+      outputs.mass.textContent = `${state.mass.toFixed(0)} kg`;
+      outputs.damping.textContent = `${state.damping.toFixed(0)} Ns/m`;
+      outputs.length.textContent = `${state.length.toFixed(1)} m`;
+      outputs.wn.textContent = `${wn.toFixed(2)} rad/s`;
+      outputs.wnHz.textContent = `${(wn / (2 * Math.PI)).toFixed(2)} Hz`;
+      outputs.zeta.textContent = zeta.toFixed(3);
+      outputs.mode.textContent = mode;
+      outputs.modePill.textContent = mode;
+      outputs.stiffness.textContent = `${getEquivalentStiffness().toFixed(1)} N/m`;
+      outputs.displacement.textContent = `Displacement: ${displacement.toFixed(2)} m`;
+      outputs.status.textContent = state.running ? "Running" : "Paused";
+    }
+
+    function syncStateFromControls() {
+      state.mass = Number(controls.mass.value);
+      state.damping = Number(controls.damping.value);
+      state.length = Number(controls.length.value);
+      syncCurrentSample();
+      syncOutputs();
+    }
+
+    function setPreset(name) {
+      const cCrit = getCriticalDamping();
+      if (name === "undamped") {
+        controls.damping.value = "0";
+      } else if (name === "light") {
+        controls.damping.value = String(Math.min(Number(controls.damping.max), Math.round(cCrit * 0.25)));
+      } else if (name === "heavy") {
+        controls.damping.value = String(Math.min(Number(controls.damping.max), Math.round(cCrit * 1.35)));
+      }
+
+      presetButtons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.preset === name);
+      });
+
+      syncStateFromControls();
+    }
+
+    function syncCurrentSample() {
+      const sample = { t: state.simTime, x: getDisplacement() };
+      if (!state.history.length) {
+        state.history.push(sample);
+        return;
+      }
+
+      const last = state.history[state.history.length - 1];
+      if (Math.abs(last.t - sample.t) < 1e-9) {
+        last.x = sample.x;
+      } else {
+        state.history.push(sample);
+      }
+    }
+
+    function trimHistory() {
+      const earliest = state.simTime - state.historyBuffer;
+      while (state.history.length > 2 && state.history[1].t < earliest) {
+        state.history.shift();
+      }
+    }
+
+    function derivatives(theta, omega) {
+      return {
+        dTheta: omega,
+        dOmega: -((state.damping / state.mass) * omega) - ((state.g / state.length) * Math.sin(theta))
+      };
+    }
+
+    function integrate(dt) {
+      const s1 = derivatives(state.theta, state.omega);
+      const s2 = derivatives(
+        state.theta + 0.5 * dt * s1.dTheta,
+        state.omega + 0.5 * dt * s1.dOmega
+      );
+      const s3 = derivatives(
+        state.theta + 0.5 * dt * s2.dTheta,
+        state.omega + 0.5 * dt * s2.dOmega
+      );
+      const s4 = derivatives(
+        state.theta + dt * s3.dTheta,
+        state.omega + dt * s3.dOmega
+      );
+
+      state.theta += (dt / 6) * (s1.dTheta + 2 * s2.dTheta + 2 * s3.dTheta + s4.dTheta);
+      state.omega += (dt / 6) * (s1.dOmega + 2 * s2.dOmega + 2 * s3.dOmega + s4.dOmega);
+      state.simTime += dt;
+
+      syncCurrentSample();
+      trimHistory();
+    }
+
+    function drawSimulation() {
+      const { ctx, width, height } = resizeCanvas(simCanvas);
+      ctx.clearRect(0, 0, width, height);
+
+      const sky = ctx.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, "rgba(12, 26, 34, 0.95)");
+      sky.addColorStop(1, "rgba(7, 16, 23, 0.96)");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = "rgba(144, 168, 181, 0.12)";
+      ctx.lineWidth = 1;
+      for (let x = 28; x < width; x += 28) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 28; y < height; y += 28) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      const beamY = 34;
+      const beamLeft = 56;
+      const beamRight = width - 56;
+      const hookX = width * 0.5;
+      const hookY = 72;
+      const ropePixels = Math.min(height * 0.56, 76 + state.length * 28);
+      const bobX = hookX + ropePixels * Math.sin(state.theta);
+      const bobY = hookY + ropePixels * Math.cos(state.theta);
+      const loadWidth = 54 + state.mass * 0.03;
+      const loadHeight = 38 + state.mass * 0.025;
+
+      const arcRadius = ropePixels;
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(255, 211, 122, 0.18)";
+      ctx.lineWidth = 2;
+      ctx.arc(hookX, hookY, arcRadius, Math.PI * 0.33, Math.PI * 0.67);
+      ctx.stroke();
+
+      ctx.fillStyle = "#6f8593";
+      ctx.fillRect(beamLeft, beamY, beamRight - beamLeft, 12);
+      ctx.fillStyle = "#e7eef2";
+      ctx.fillRect(hookX - 24, beamY + 10, 48, 22);
+      ctx.fillStyle = "#f4a340";
+      ctx.beginPath();
+      ctx.arc(hookX, hookY - 8, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#f6d59b";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(hookX, hookY);
+      ctx.lineTo(bobX, bobY);
+      ctx.stroke();
+
+      ctx.fillStyle = "#fef6e6";
+      ctx.beginPath();
+      ctx.arc(bobX, bobY, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      const hangerY = bobY + 12;
+      const boxTop = hangerY + 10;
+
+      ctx.strokeStyle = "#f6d59b";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(bobX, bobY);
+      ctx.lineTo(bobX, hangerY);
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(bobX, boxTop + loadHeight / 2);
+      ctx.rotate(state.theta * 0.14);
+
+      const loadGradient = ctx.createLinearGradient(-loadWidth / 2, -loadHeight / 2, loadWidth / 2, loadHeight / 2);
+      loadGradient.addColorStop(0, "#f4a340");
+      loadGradient.addColorStop(1, "#bf5f2c");
+      ctx.fillStyle = loadGradient;
+      ctx.strokeStyle = "#2a1711";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-loadWidth / 2, -loadHeight / 2, loadWidth, loadHeight, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(42, 23, 17, 0.35)";
+      ctx.beginPath();
+      ctx.moveTo(-loadWidth / 2 + 12, -loadHeight / 2 + 10);
+      ctx.lineTo(loadWidth / 2 - 12, -loadHeight / 2 + 10);
+      ctx.moveTo(-loadWidth / 2 + 12, 0);
+      ctx.lineTo(loadWidth / 2 - 12, 0);
+      ctx.moveTo(-loadWidth / 2 + 12, loadHeight / 2 - 10);
+      ctx.lineTo(loadWidth / 2 - 12, loadHeight / 2 - 10);
+      ctx.stroke();
+
+      ctx.restore();
+
+      const swayMeters = getDisplacement();
+      const swayDegrees = state.theta * 180 / Math.PI;
+      ctx.fillStyle = "rgba(238, 245, 242, 0.92)";
+      ctx.font = '15px "Trebuchet MS", "Gill Sans", sans-serif';
+      ctx.fillText(`Horizontal displacement x = ${swayMeters.toFixed(2)} m`, 20, height - 46);
+      ctx.fillText(`Angle = ${swayDegrees.toFixed(1)}°`, 20, height - 22);
+
+      ctx.fillStyle = "rgba(145, 163, 175, 0.92)";
+      ctx.textAlign = "right";
+      ctx.fillText("Fixed crane hook", width - 20, 28);
+      ctx.textAlign = "left";
+    }
+
+    function drawGraph() {
+      const { ctx, width, height } = resizeCanvas(graphCanvas);
+      ctx.clearRect(0, 0, width, height);
+
+      const margin = { top: 24, right: 24, bottom: 42, left: 64 };
+      const plotWidth = width - margin.left - margin.right;
+      const plotHeight = height - margin.top - margin.bottom;
+      const windowStart = Math.max(0, state.simTime - state.historyWindow);
+      const visibleHistory = state.history.filter((entry) => entry.t >= windowStart);
+
+      if (!visibleHistory.length) {
+        visibleHistory.push({ t: state.simTime, x: getDisplacement() });
+      }
+
+      const current = visibleHistory[visibleHistory.length - 1];
+      if (Math.abs(current.t - state.simTime) > 1e-6) {
+        visibleHistory.push({ t: state.simTime, x: getDisplacement() });
+      }
+
+      const peak = Math.max(
+        0.2,
+        Math.abs(getDisplacement()) * 1.2,
+        state.length * Math.sin(state.initialTheta) * 1.25,
+        ...visibleHistory.map((entry) => Math.abs(entry.x) * 1.1)
+      );
+
+      const yMin = -peak;
+      const yMax = peak;
+
+      const background = ctx.createLinearGradient(0, 0, 0, height);
+      background.addColorStop(0, "rgba(13, 28, 36, 0.95)");
+      background.addColorStop(1, "rgba(6, 16, 23, 0.98)");
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = "rgba(144, 168, 181, 0.16)";
+      ctx.lineWidth = 1;
+
+      const xDivisions = 10;
+      for (let i = 0; i <= xDivisions; i += 1) {
+        const x = margin.left + (plotWidth * i) / xDivisions;
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top);
+        ctx.lineTo(x, margin.top + plotHeight);
+        ctx.stroke();
+
+        const t = windowStart + (state.historyWindow * i) / xDivisions;
+        ctx.fillStyle = "rgba(145, 163, 175, 0.95)";
+        ctx.font = '12px Consolas, "Courier New", monospace';
+        ctx.textAlign = "center";
+        ctx.fillText(`${t.toFixed(0)} s`, x, height - 16);
+      }
+
+      const yDivisions = 8;
+      for (let i = 0; i <= yDivisions; i += 1) {
+        const ratio = i / yDivisions;
+        const y = margin.top + plotHeight * ratio;
+        ctx.beginPath();
+        ctx.moveTo(margin.left, y);
+        ctx.lineTo(width - margin.right, y);
+        ctx.stroke();
+
+        const value = yMax - ratio * (yMax - yMin);
+        ctx.fillStyle = "rgba(145, 163, 175, 0.95)";
+        ctx.textAlign = "right";
+        ctx.fillText(`${value.toFixed(2)} m`, margin.left - 10, y + 4);
+      }
+
+      const zeroY = margin.top + ((yMax - 0) / (yMax - yMin)) * plotHeight;
+      ctx.strokeStyle = "rgba(255, 211, 122, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(margin.left, zeroY);
+      ctx.lineTo(width - margin.right, zeroY);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#47c6d7";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+
+      visibleHistory.forEach((entry, index) => {
+        const xRatio = (entry.t - windowStart) / state.historyWindow;
+        const yRatio = (entry.x - yMin) / (yMax - yMin);
+        const px = margin.left + xRatio * plotWidth;
+        const py = margin.top + (1 - yRatio) * plotHeight;
+
+        if (index === 0) {
+          ctx.moveTo(px, py);
+        } else {
+          ctx.lineTo(px, py);
+        }
+      });
+
+      ctx.stroke();
+
+      const last = visibleHistory[visibleHistory.length - 1];
+      const lastX = margin.left + ((last.t - windowStart) / state.historyWindow) * plotWidth;
+      const lastY = margin.top + (1 - (last.x - yMin) / (yMax - yMin)) * plotHeight;
+      ctx.fillStyle = "#ffd37a";
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(238, 245, 242, 0.95)";
+      ctx.font = '13px "Trebuchet MS", "Gill Sans", sans-serif';
+      ctx.textAlign = "left";
+      ctx.fillText("Displacement (m)", margin.left, 14);
+      ctx.textAlign = "right";
+      ctx.fillText("Time (s)", width - margin.right, height - 16);
+    }
+
+    function animate(timestamp) {
+      if (!state.lastFrameTime) {
+        state.lastFrameTime = timestamp;
+      }
+
+      const elapsed = Math.min((timestamp - state.lastFrameTime) / 1000, 0.05);
+      state.lastFrameTime = timestamp;
+
+      if (state.running) {
+        let remaining = elapsed;
+        while (remaining > 0) {
+          const dt = Math.min(remaining, 1 / 240);
+          integrate(dt);
+          remaining -= dt;
+        }
+      } else {
+        syncCurrentSample();
+      }
+
+      syncOutputs();
+      drawSimulation();
+      drawGraph();
+      requestAnimationFrame(animate);
+    }
+
+    buttons.start.addEventListener("click", () => {
+      state.running = true;
+      syncOutputs();
+    });
+
+    buttons.pause.addEventListener("click", () => {
+      state.running = false;
+      syncOutputs();
+    });
+
+    buttons.reset.addEventListener("click", () => {
+      state.running = false;
+      state.theta = state.initialTheta;
+      state.omega = 0;
+      state.simTime = 0;
+      state.history = [];
+      syncCurrentSample();
+      syncOutputs();
+    });
+
+    Object.values(controls).forEach((control) => {
+      control.addEventListener("input", () => {
+        syncStateFromControls();
+      });
+    });
+
+    presetButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setPreset(button.dataset.preset);
+      });
+    });
+
+    syncCurrentSample();
+    syncOutputs();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
